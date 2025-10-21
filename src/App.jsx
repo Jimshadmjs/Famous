@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function App() {
-  const [data, setData] = useState({
-    personalDebit: { yesterday: "", withdrawals: [] },
-    personalCredit: { yesterday: "", withdrawals: [] },
-    companyDebit: { yesterday: "", withdrawals: [] },
-    companyCredit: { yesterday: "", withdrawals: [] },
-    himayan: { yesterday: "", withdrawals: [] },
+  const [data, setData] = useState(() => {
+    const saved = localStorage.getItem("companyCalculatorData");
+    return (
+      JSON.parse(saved) || {
+        personalDebit: { yesterday: 0, withdrawals: [] },
+        personalCredit: { yesterday: 0, withdrawals: [] },
+        companyDebit: { yesterday: 0, withdrawals: [] },
+        companyCredit: { yesterday: 0, withdrawals: [] },
+        himayan: { yesterday: 0, withdrawals: [] },
+      }
+    );
   });
 
   const [newAmount, setNewAmount] = useState({
@@ -17,7 +22,14 @@ function App() {
     himayan: "",
   });
 
-  // Track highlighted items per section as index array
+  const [newDeposit, setNewDeposit] = useState({
+    personalDebit: "",
+    personalCredit: "",
+    companyDebit: "",
+    companyCredit: "",
+    himayan: "",
+  });
+
   const [highlighted, setHighlighted] = useState({
     personalDebit: [],
     personalCredit: [],
@@ -26,11 +38,29 @@ function App() {
     himayan: [],
   });
 
+  // Save data automatically
+  useEffect(() => {
+    localStorage.setItem("companyCalculatorData", JSON.stringify(data));
+  }, [data]);
+
   const handleYesterdayChange = (section, value) => {
     setData({
       ...data,
       [section]: { ...data[section], yesterday: Number(value) || 0 },
     });
+  };
+
+  const handleAddDeposit = (section) => {
+    const amount = Number(newDeposit[section]);
+    if (!amount) return;
+
+    const updatedBalance = data[section].yesterday + amount;
+    setData({
+      ...data,
+      [section]: { ...data[section], yesterday: updatedBalance },
+    });
+
+    setNewDeposit({ ...newDeposit, [section]: "" });
   };
 
   const handleAddAmount = (section) => {
@@ -55,7 +85,6 @@ function App() {
       [section]: { ...data[section], withdrawals: updatedWithdrawals },
     });
 
-    // Remove highlight if exists
     setHighlighted((prev) => ({
       ...prev,
       [section]: prev[section].filter((i) => i !== index),
@@ -75,17 +104,64 @@ function App() {
     });
   };
 
-  const getTotalWithdrawals = (section) => {
-    return data[section].withdrawals.reduce((sum, amt) => sum + amt, 0);
-  };
+  const getTotalWithdrawals = (section) =>
+    data[section].withdrawals.reduce((sum, amt) => sum + amt, 0);
 
-  const getTodayBalance = (section) => {
-    return data[section].yesterday - getTotalWithdrawals(section);
+  const getTodayBalance = (section) =>
+    data[section].yesterday - getTotalWithdrawals(section);
+
+  // 🧹 Clear All Data Function
+  const handleClearAll = () => {
+    const confirmClear = window.confirm(
+      "Are you sure you want to clear all data?"
+    );
+    if (!confirmClear) return;
+
+    const emptyState = {
+      personalDebit: { yesterday: 0, withdrawals: [] },
+      personalCredit: { yesterday: 0, withdrawals: [] },
+      companyDebit: { yesterday: 0, withdrawals: [] },
+      companyCredit: { yesterday: 0, withdrawals: [] },
+      himayan: { yesterday: 0, withdrawals: [] },
+    };
+
+    setData(emptyState);
+    setNewAmount({
+      personalDebit: "",
+      personalCredit: "",
+      companyDebit: "",
+      companyCredit: "",
+      himayan: "",
+    });
+    setNewDeposit({
+      personalDebit: "",
+      personalCredit: "",
+      companyDebit: "",
+      companyCredit: "",
+      himayan: "",
+    });
+    setHighlighted({
+      personalDebit: [],
+      personalCredit: [],
+      companyDebit: [],
+      companyCredit: [],
+      himayan: [],
+    });
+
+    localStorage.removeItem("companyCalculatorData");
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6">
       <h1 className="text-3xl font-bold mb-8">Company Daily Calculator</h1>
+
+      {/* Clear All Data Button */}
+      <button
+        onClick={handleClearAll}
+        className="mb-6 bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-lg font-medium shadow-md transition-all"
+      >
+        🧹 Clear All Data
+      </button>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6 w-full max-w-8xl">
         {Object.keys(data).map((section) => (
@@ -106,6 +182,28 @@ function App() {
               onChange={(e) => handleYesterdayChange(section, e.target.value)}
               className="w-full border rounded-lg px-3 py-2 mb-4 focus:ring focus:ring-blue-200"
             />
+
+            {/* Deposit Amount */}
+            <label className="block mb-2 text-sm font-medium text-gray-600">
+              Add Deposit
+            </label>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="number"
+                value={newDeposit[section]}
+                onChange={(e) =>
+                  setNewDeposit({ ...newDeposit, [section]: e.target.value })
+                }
+                placeholder="Enter deposit amount"
+                className="flex-1 border rounded-lg px-3 py-2 focus:ring focus:ring-green-200"
+              />
+              <button
+                onClick={() => handleAddDeposit(section)}
+                className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg"
+              >
+                +
+              </button>
+            </div>
 
             {/* Today's Withdrawals */}
             <label className="block mb-2 text-sm font-medium text-gray-600">
@@ -145,7 +243,7 @@ function App() {
                     <span>₹ {amt}</span>
                     <button
                       onClick={(e) => {
-                        e.stopPropagation(); // prevent toggle on remove
+                        e.stopPropagation();
                         handleRemoveAmount(section, index);
                       }}
                       className="text-red-500 hover:text-red-700"
